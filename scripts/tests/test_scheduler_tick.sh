@@ -10,6 +10,8 @@
 #   - an `on: "*"` handler rotates past a source it handled recently
 #   - the persist retry rebuilds on upstream's cron-state after losing a race
 #     and keeps every stamp, including chain:<name>
+#   - a skill whose schedule cron-due.sh rejects is reported with a ::warning::
+#     instead of being skipped without a trace
 #   - a state push that origin keeps rejecting fails the tick with an ::error::
 #     instead of ending green with the dispatch stamps lost
 #   - failed-run retries and breaker probes respect the skill's own cadence: a
@@ -77,6 +79,7 @@ skills:
   weekly-down: { enabled: true, schedule: "0 9 * * 1" }
   weekly-flaky: { enabled: true, schedule: "0 5 * * 2" }
   manual: { enabled: true, schedule: "workflow_dispatch" }
+  bad-cron: { enabled: true, schedule: "@daily" }
 
 reactive:
   skill-repair:
@@ -160,6 +163,9 @@ grep -q 'skill=weekly-down' "$TMP/gh.log" && bad "weekly skill probed off-cadenc
 dispatched "workflow run aeon.yml -f skill=weekly-flaky" && ok "weekly skill still gets a quick retry for its failed slot" \
   || bad "weekly-flaky not quick-retried"
 grep -q 'skill=manual' "$TMP/gh.log" && bad "workflow_dispatch-only skill auto-retried" || ok "workflow_dispatch skill never retried"
+grep -q 'skill=bad-cron' "$TMP/gh.log" && bad "skill with an invalid schedule dispatched" || ok "invalid schedule is not dispatched"
+grep -q '^::warning::skill bad-cron has an invalid schedule' "$TMP/tick.out" \
+  && ok "invalid schedule is annotated, not skipped silently" || bad "invalid schedule not annotated: $(grep -i invalid "$TMP/tick.out")"
 
 STATE="$(git -C "$TMP/origin.git" show main:memory/cron-state.json)"
 NOW=2026-07-07T06:05:00Z
