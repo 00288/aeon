@@ -1035,6 +1035,7 @@ jobs:
             echo "Riva shadow mode: declared and disclosure credentials withheld"
           fi
           [ -n "$INJECTED" ] && echo "::notice::Injected declared secrets for ${SKILL_NAME}:${INJECTED}"
+          export AEON_SECRETCURL_ALLOW="$(bash scripts/skill_requires.sh "$SKILL_NAME" 2>/dev/null | tr '\n' ' ')"
 
           unset ALL_SECRETS   # drop the secrets blob before any skill/Claude code runs
 
