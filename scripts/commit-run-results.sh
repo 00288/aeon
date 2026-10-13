@@ -8,7 +8,9 @@
 # first. Run it from the repo root. The workflows run the copy from the run's
 # starting commit (git show "$GITHUB_SHA:scripts/commit-run-results.sh"), not
 # the working tree, so an agent edit to this file never changes how its own
-# run is committed.
+# run is committed. The push helpers it calls (git-push-retry.sh, audit.sh) and
+# the repo's git hooks get the same treatment: they run with push credentials,
+# so they come from that commit too, and hooks are switched off.
 #
 # If the agent left the checkout on a feature branch, only its real change is
 # committed and pushed to that branch. Post-run state (memory/, output/,
@@ -30,6 +32,12 @@ main() {
   local CURRENT_BRANCH BRANCH_PUSH_FAILED=false HAS_MAIN STASHED p PUSH_RC
   local -a STATE_PATHS=()
   CURRENT_BRANCH=$(git branch --show-current)
+
+  # Hooks live in the working tree's .git, which the run could write. Environment
+  # config outranks the repo's own config, so this holds for every git call below
+  # and in the push helper.
+  local N_CFG="${GIT_CONFIG_COUNT:-0}"
+  export "GIT_CONFIG_KEY_${N_CFG}=core.hooksPath" "GIT_CONFIG_VALUE_${N_CFG}=/dev/null" "GIT_CONFIG_COUNT=$((N_CFG + 1))"
 
   # A failed feature-branch push still records this run's state on main
   # below, then fails the step so the lost PR work is visible.
@@ -100,6 +108,26 @@ main() {
     fi
   fi
 
+  # scripts/ and .github/ are what later runs execute with the repo's credentials,
+  # so a run does not change them on main. Skills that need to (aeon-update,
+  # skill-repair, self-improve, ...) work on a branch and open a PR, which the
+  # feature-branch path above handles. Anything left here, uncommitted or
+  # committed by the run, is put back to origin/main and reported.
+  local -a GUARDED=(scripts .github)
+  if git rev-parse -q --verify origin/main >/dev/null \
+    && { [ -n "$(git status --porcelain -- "${GUARDED[@]}")" ] \
+      || [ -n "$(git diff --name-only origin/main HEAD -- "${GUARDED[@]}")" ]; }; then
+    echo "::error::This run changed ${GUARDED[*]} on main; those changes were dropped. Changes there belong on a branch with a PR."
+    for p in "${GUARDED[@]}"; do
+      if git cat-file -e "origin/main:$p" 2>/dev/null; then
+        git restore --source=origin/main --staged --worktree -- "$p"
+      else
+        git rm -rfq --cached --ignore-unmatch -- "$p"
+      fi
+      git clean -fdq -- "$p"
+    done
+  fi
+
   # Commit any remaining changes on main
   git add -A
   if git diff --staged --quiet; then
@@ -114,7 +142,16 @@ main() {
     git commit -m "chore($LABEL): auto-commit $(date +%Y-%m-%d)"
   fi
   PUSH_RC=0
-  bash scripts/git-push-retry.sh || PUSH_RC=$?
+  local HELPERS
+  HELPERS=$(mktemp -d)
+  if [ -n "${GITHUB_SHA:-}" ] \
+    && git show "$GITHUB_SHA:scripts/git-push-retry.sh" > "$HELPERS/git-push-retry.sh" 2>/dev/null \
+    && git show "$GITHUB_SHA:scripts/audit.sh" > "$HELPERS/audit.sh" 2>/dev/null; then
+    AEON_AUDIT_SCRIPT="$HELPERS/audit.sh" bash "$HELPERS/git-push-retry.sh" || PUSH_RC=$?
+  else
+    bash scripts/git-push-retry.sh || PUSH_RC=$?
+  fi
+  rm -rf "$HELPERS"
   finish "$PUSH_RC"
 }
 
