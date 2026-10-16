@@ -6,7 +6,7 @@
 # {
 #   "id": "claude",
 #   "label": "Claude Code",
-#   "cli": { "install": "npm i -g @anthropic-ai/claude-code@2.1.287", "bin": "claude", "min_version": "2.1.287" },
+#   "cli": { "install": "npm i -g @anthropic-ai/claude-code@2.1.301", "bin": "claude", "min_version": "2.1.301" },
 #   "invoke": "claude -p - --output-format json",
 #   "round_trip": true,
 #   "token_usage": "full",
@@ -87,6 +87,13 @@ fi
 if [ -n "${ANTHROPIC_BASE_URL:-}" ]; then
   export CLAUDE_CODE_DISABLE_1M_CONTEXT="${CLAUDE_CODE_DISABLE_1M_CONTEXT:-1}"
 fi
+
+# Unattended retry mode: wait out 429/529s instead of failing on the first one,
+# but end the request (2.1.301+) when a usage limit resets more than 10 min away,
+# so a capped subscription fails the run in minutes instead of sitting until the
+# --timeout guard (1800s on a skill run). Operator values win.
+export CLAUDE_CODE_RETRY_WATCHDOG="${CLAUDE_CODE_RETRY_WATCHDOG:-1}"
+export CLAUDE_CODE_RETRY_WATCHDOG_MAX_USAGE_LIMIT_WAIT_MS="${CLAUDE_CODE_RETRY_WATCHDOG_MAX_USAGE_LIMIT_WAIT_MS:-600000}"
 
 OUT="$RH_TMPDIR/claude-out.json"
 claude "${ARGS[@]}" < "$RH_PROMPT_FILE" > "$OUT"
