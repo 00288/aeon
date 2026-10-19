@@ -1,12 +1,13 @@
 {
   "heartbeat": {
-    "last_status": "failed",
+    "last_status": "success",
     "last_failed": "2026-10-19T11:57:52Z",
-    "total_runs": 3,
-    "total_successes": 0,
+    "total_runs": 4,
+    "total_successes": 1,
     "total_failures": 3,
-    "consecutive_failures": 3,
-    "success_rate": 0,
-    "last_error": "kimi exited 1: error: failed to run prompt: provider.api_error: 402 This request requires more credits, or fewer max_tokens. You requested up to 131072 tokens, but can only afford 4997. To increase, v"
+    "consecutive_failures": 0,
+    "success_rate": 0.25,
+    "last_error": "kimi exited 1: error: failed to run prompt: provider.api_error: 402 This request requires more credits, or fewer max_tokens. You requested up to 131072 tokens, but can only afford 4997. To increase, v",
+    "last_success": "2026-10-19T12:00:39Z"
   }
 }
